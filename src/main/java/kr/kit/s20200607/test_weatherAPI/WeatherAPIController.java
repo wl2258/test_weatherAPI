@@ -1,9 +1,11 @@
 package kr.kit.s20200607.test_weatherAPI;
 
+import kr.kit.s20200607.ServiceKey;
 import kr.kit.s20200607.test_weatherAPI.domain.ClearLocationInfoDTO;
 import kr.kit.s20200607.test_weatherAPI.domain.RecommendTravelDTO;
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -142,17 +144,20 @@ public class WeatherAPIController {
 
         List<String> clearLocationList = new ArrayList<>();
         List<ClearLocationInfoDTO> clearLocationInfoDTOList = new ArrayList<>();
-        String url = "https://api.openweathermap.org/data/2.5/weather" ;
+
         String weatherKey = serviceKey.getWeatherKey();
 
-        StringBuilder urlStringBuilder = new StringBuilder(url);
-        StringBuilder result = new StringBuilder();
+
+
         /*
             * 맑음 지역 필터링
          */
         try {
             Iterator<String> iterator = locationList.keySet().iterator();
+            String url = "https://api.openweathermap.org/data/2.5/weather" ;
+
             while (iterator.hasNext()) {
+                StringBuilder urlStringBuilder = new StringBuilder(url);
                 String location = iterator.next();
 
                 urlStringBuilder.append("?" + URLEncoder.encode("q", "UTF-8") + "=" + URLEncoder.encode(location, "UTF-8"));
@@ -164,29 +169,25 @@ public class WeatherAPIController {
                 HttpURLConnection urlConnection = (HttpURLConnection) url1.openConnection();
                 urlConnection.setRequestMethod("GET");
 
-                BufferedReader br = new BufferedReader(new InputStreamReader(urlConnection.getInputStream()));
-
-                /*
+                BufferedReader br ;
                 if (urlConnection.getResponseCode() >= 200 && urlConnection.getResponseCode() <= 300) {
                     br = new BufferedReader(new InputStreamReader(urlConnection.getInputStream()));
                 } else {
                     br = new BufferedReader(new InputStreamReader(urlConnection.getErrorStream()));
                 }
-                 */
+
 
                 // 날씨 api 반환 결과
+                StringBuilder result = new StringBuilder();
                 String returnLine;
                 while ((returnLine = br.readLine()) != null) {
-                    if (returnLine.equals("Too big request header")) break;
                     result.append(returnLine);
                 }
-
 
                 br.close();
                 urlConnection.disconnect();
 
                 // json 결과 파싱
-                System.out.println(result.toString());
                 JSONObject jsonObj = new JSONObject(result.toString());
                 JSONObject coordObj = jsonObj.getJSONObject("coord");
                 JSONArray weatherArray = jsonObj.getJSONArray("weather");
@@ -225,8 +226,7 @@ public class WeatherAPIController {
             * 관광지 추천
          */
         String resultTravel = "";
-        List<ClearDTO<RecommendTravelDTO>> results = new ArrayList<>();
-
+        List<ClearDTO> clearDTOList = new ArrayList<>( );
 
         for (int i = 0; i < clearLocationList.toArray().length; i++) {
             String apiUrl = "http://apis.data.go.kr/B551011/KorService/searchKeyword";
@@ -276,44 +276,51 @@ public class WeatherAPIController {
 
                 JSONArray itemsJSONArray = items.getJSONArray("item");
 
-                //List<RecommendTravelDTO> travelDTOList = new ArrayList<>(); //추천 관광지 정보 리스트
-                List<String> travelDTOList = new ArrayList<>();
-
+                List<Travels> travels = new ArrayList<>();
                 for (int j = 0; j < itemsJSONArray.length(); j++) {
                     JSONObject itemObj = itemsJSONArray.getJSONObject(j);
                     String title = itemObj.getString("title");
-                    travelDTOList.add(title);
-//                    String outputUrl = itemObj.getString("url");
-//                    if (!outputUrl.equals("-"))
-//                        travelDTOList.add(new RecommendTravelDTO(title, outputUrl));
+                    String mapX = itemObj.getString("mapx");
+                    String mapY = itemObj.getString("mapy");
+                    PosDTO pos = new PosDTO(mapX, mapY);
 
+                    travels.add(new Travels(title, pos));
                 }
-                    String location = clearLocationInfoDTOList.get(i).getLocation();
-                    String temp = clearLocationInfoDTOList.get(i).getTemp();
+                String location = clearLocationInfoDTOList.get(i).getLocation();
+                String temp = clearLocationInfoDTOList.get(i).getTemp();
 
-                    ClearLocationInfoDTO clear = new ClearLocationInfoDTO(temp, location);
-                    ClearDTO<RecommendTravelDTO> resultList = new ClearDTO(clear, travelDTOList);
-
-                    results.add(resultList);
+                ClearLocationInfoDTO clear = new ClearLocationInfoDTO(temp, location);
+                ClearDTO clearDTO = new ClearDTO(clear, travels);
+                clearDTOList.add(clearDTO);
 
             } catch (Exception e) {
                 e.printStackTrace();
             }
         }
-        return new Response(results);
+        return new Response(clearDTOList);
     }
 
     @Data
     @AllArgsConstructor
+    @NoArgsConstructor
+    static  class PosDTO {
+        private String x;
+        private String y;
+    }
+
+    @Data
+    @AllArgsConstructor
+    static class Travels {
+        private String title;
+        private PosDTO pos;
+    }
+
+    @Data
+    @AllArgsConstructor
+    @NoArgsConstructor
     static  class ClearDTO<T> {
         private ClearLocationInfoDTO locationInfo;
-        private T title;
-    }
-
-    @Data
-    @AllArgsConstructor
-    static class Result<T> {
-        private T result;
+        private T travels;
     }
 
     @Data
